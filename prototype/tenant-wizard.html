@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TiDB 多租户管控台 — 租户创建向导（原型）</title>
+<style>
+  :root{
+    --primary:#1677ff; --primary-bg:#e6f4ff; --border:#e5e7eb; --bg:#f5f7fa;
+    --text:#1f2937; --muted:#6b7280; --ok:#16a34a; --warn:#d97706; --danger:#dc2626;
+    --radius:8px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--text);font-size:14px;line-height:1.6;}
+  header{background:#001529;color:#fff;padding:0 24px;height:56px;display:flex;align-items:center;gap:16px;}
+  header .logo{font-weight:700;font-size:16px;}
+  header .sub{color:#ffffffa8;font-size:12px;}
+  .layout{display:flex;min-height:calc(100vh - 56px);}
+  aside{width:220px;background:#fff;border-right:1px solid var(--border);padding:12px 0;}
+  aside a{display:block;padding:10px 24px;color:var(--muted);text-decoration:none;}
+  aside a.active{color:var(--primary);background:var(--primary-bg);border-right:3px solid var(--primary);font-weight:600;}
+  main{flex:1;padding:24px;max-width:1100px;}
+  .card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px;}
+  h2{margin:0 0 4px;font-size:18px;} h3{margin:0 0 12px;font-size:15px;}
+  .desc{color:var(--muted);margin:0 0 16px;font-size:13px;}
+  /* steps */
+  .steps{display:flex;margin-bottom:24px;}
+  .step{flex:1;text-align:center;position:relative;color:var(--muted);font-size:13px;}
+  .step .dot{width:28px;height:28px;border-radius:50%;background:#e5e7eb;color:#9ca3af;
+    display:inline-flex;align-items:center;justify-content:center;font-weight:700;margin-bottom:6px;}
+  .step.done .dot{background:var(--ok);color:#fff;}
+  .step.active .dot{background:var(--primary);color:#fff;box-shadow:0 0 0 4px var(--primary-bg);}
+  .step::after{content:"";position:absolute;top:14px;left:50%;width:100%;height:2px;background:#e5e7eb;z-index:0;}
+  .step:last-child::after{display:none;}
+  .step span{position:relative;z-index:1;background:#fff;padding:0 6px;}
+  /* form */
+  label{display:block;font-weight:600;margin:0 0 6px;}
+  .row{margin-bottom:16px;}
+  input,select{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:14px;}
+  input:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-bg);}
+  .seg{display:flex;gap:8px;}
+  .seg label{flex:1;border:1px solid var(--border);border-radius:8px;padding:12px;cursor:pointer;margin:0;font-weight:500;}
+  .seg input{display:none;}
+  .seg label.sel{border-color:var(--primary);background:var(--primary-bg);}
+  .seg small{display:block;color:var(--muted);font-weight:400;margin-top:4px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  /* topology */
+  .topo{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;}
+  .store{border:1px solid var(--border);border-radius:8px;padding:10px;font-size:12px;cursor:pointer;transition:.15s;}
+  .store:hover{border-color:var(--primary);}
+  .store.sel{border-color:var(--primary);background:var(--primary-bg);}
+  .store .id{font-weight:700;color:var(--primary);}
+  .store .bar{height:6px;background:#eee;border-radius:3px;margin-top:6px;overflow:hidden;}
+  .store .bar i{display:block;height:100%;background:linear-gradient(90deg,#22c55e,#eab308,#ef4444);}
+  .zone-title{margin:14px 0 8px;font-weight:700;color:var(--text);font-size:13px;display:flex;align-items:center;gap:6px;}
+  .zone-title::before{content:"";width:4px;height:14px;background:var(--primary);border-radius:2px;}
+  /* sql preview */
+  pre{background:#0d1117;color:#c9d1d9;padding:14px;border-radius:8px;overflow:auto;font-size:12.5px;line-height:1.7;}
+  pre .kw{color:#ff7b72;} pre .str{color:#a5d6ff;} pre .num{color:#79c0ff;} pre .cmt{color:#8b949e;}
+  .btn{padding:8px 18px;border-radius:6px;border:1px solid var(--border);background:#fff;cursor:pointer;font-size:14px;}
+  .btn.primary{background:var(--primary);color:#fff;border-color:var(--primary);}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .nav-btns{display:flex;justify-content:space-between;margin-top:8px;}
+  .tag{display:inline-block;background:#f0f1f3;border-radius:4px;padding:1px 8px;font-size:12px;margin:2px;}
+  .tag.blue{background:var(--primary-bg);color:var(--primary);}
+  .tag.green{background:#dcfce7;color:var(--ok);}
+  .tag.amber{background:#fef3c7;color:var(--warn);}
+  .summary{display:grid;grid-template-columns:140px 1fr;gap:6px 12px;font-size:13px;}
+  .summary dt{color:var(--muted);}
+  .review-sql{max-height:360px;}
+  .warn{background:#fffbeb;border:1px solid #fde68a;color:#92400e;padding:10px 12px;border-radius:6px;font-size:13px;margin-top:12px;}
+  .hint{color:var(--muted);font-size:12px;margin-top:4px;}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">🏗️ TiDB 多租户管控台</div>
+  <div class="sub">Tenant Console · 原型演示</div>
+</header>
+<div class="layout">
+  <aside>
+    <a>集群总览</a>
+    <a>TiKV 拓扑</a>
+    <a>放置策略</a>
+    <a>资源管控</a>
+    <a class="active">租户管理</a>
+    <a>监控告警</a>
+    <a>审计日志</a>
+  </aside>
+  <main>
+    <h2>创建租户</h2>
+    <p class="desc">向导式创建：把「打标签 → 放置策略 → 资源组 → 建库 → 建用户」原子化编排，失败自动回滚。隔离级别可在物理 / 逻辑 / 混合间选择。</p>
+
+    <div class="card">
+      <div class="steps" id="steps"></div>
+
+      <!-- STEP 1 -->
+      <section class="pane" data-step="1">
+        <h3>① 基础信息</h3>
+        <div class="grid2">
+          <div class="row"><label>租户名称</label><input id="tenantName" value="acme" oninput="render()" /></div>
+          <div class="row"><label>所属集群</label><select><option>ecology 测试集群 (v7.1.9)</option></select></div>
+        </div>
+        <div class="row">
+          <label>隔离级别</label>
+          <div class="seg" id="isoSeg">
+            <label data-v="PHYSICAL"><input type="radio" name="iso" /><b>物理隔离</b><small>独占 TiKV 节点池，故障域隔离</small></label>
+            <label class="sel" data-v="LOGICAL"><input type="radio" name="iso" checked /><b>逻辑隔离</b><small>共享节点，仅 RU 配额</small></label>
+            <label data-v="HYBRID"><input type="radio" name="iso" /><b>混合（推荐）</b><small>物理隔离 + RU 配额双重保障</small></label>
+          </div>
+          <div class="hint" id="isoHint"></div>
+        </div>
+      </section>
+
+      <!-- STEP 2 -->
+      <section class="pane" data-step="2" style="display:none">
+        <h3>② 节点池与 TiKV 标签 <span class="tag blue" id="poolSummary"></span></h3>
+        <p class="desc">选择该租户数据要放置到的 TiKV 节点池（按标签）。逻辑隔离可跳过。</p>
+        <div id="topo"></div>
+      </section>
+
+      <!-- STEP 3 -->
+      <section class="pane" data-step="3" style="display:none">
+        <h3>③ 放置策略 Placement Policy</h3>
+        <div class="grid2">
+          <div class="row"><label>主 Region (PRIMARY_REGION)</label><input id="primaryRegion" value="east" oninput="render()" /></div>
+          <div class="row"><label>副本 Regions (逗号分隔)</label><input id="regions" value="east,west" oninput="render()" /></div>
+          <div class="row"><label>Voters</label><input id="voters" type="number" value="3" oninput="render()" /></div>
+          <div class="row"><label>Followers</label><input id="followers" type="number" value="2" oninput="render()" /></div>
+        </div>
+        <div class="row"><label>存活偏好 SURVIVAL_PREFERENCES</label>
+          <select id="survival" onchange="render()"><option value="zone,host">zone, host</option><option value="zone">zone</option><option value="host">host</option></select>
+        </div>
+      </section>
+
+      <!-- STEP 4 -->
+      <section class="pane" data-step="4" style="display:none">
+        <h3>④ 资源管控 Resource Group</h3>
+        <div class="grid2">
+          <div class="row"><label>RU 配额 (RU_PER_SEC)</label><input id="ru" type="number" value="2000" oninput="render()" /></div>
+          <div class="row"><label>优先级</label><select id="priority" onchange="render()"><option>MEDIUM</option><option>HIGH</option><option>LOW</option></select></div>
+        </div>
+        <div class="row">
+          <label>选项</label>
+          <div class="seg">
+            <label class="sel"><input type="checkbox" id="burstable" checked onchange="render()" /><b>BURSTABLE</b><small>允许短时超出配额</small></label>
+            <label><input type="checkbox" id="dryrun" onchange="render()" /><b>灰度绑定</b><small>先绑 1 张表观察调度</small></label>
+          </div>
+        </div>
+        <div class="warn">⚠️ Resource Control 配额是软限制：超出会限流（BURSTABLE 时允许短时突增），不隔离故障域。物理故障域隔离由放置策略保证。</div>
+      </section>
+
+      <!-- STEP 5 -->
+      <section class="pane" data-step="5" style="display:none">
+        <h3>⑤ 数据库与用户</h3>
+        <div class="row"><label>数据库（逗号分隔，将自动加租户前缀）</label>
+          <input id="dbs" value="core,log" oninput="render()" /></div>
+        <div class="row"><label>用户（逗号分隔）</label>
+          <input id="users" value="app_rw,report_ro" oninput="render()" /></div>
+        <div class="hint">用户将自动绑定到该租户的资源组，受 RU 配额约束。</div>
+      </section>
+
+      <!-- STEP 6 -->
+      <section class="pane" data-step="6" style="display:none">
+        <h3>⑥ 确认执行</h3>
+        <div class="card" style="background:#fafafa;border-style:dashed">
+          <dl class="summary" id="review"></dl>
+        </div>
+        <h3 style="margin-top:16px">将执行的 SQL（编排 6 步，失败自动回滚）</h3>
+        <pre class="review-sql" id="sqlPreview"></pre>
+        <div class="warn" id="dryRunNote"></div>
+      </section>
+
+      <div class="nav-btns">
+        <button class="btn" id="prev" onclick="nav(-1)">上一步</button>
+        <button class="btn primary" id="next" onclick="nav(1)">下一步</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+const TOTAL=6; let cur=1;
+const isoText={PHYSICAL:'物理隔离：需选择独占节点池，policy 约束到该池标签',LOGICAL:'逻辑隔离：无需选节点池，仅靠 resource group 配额',HYBRID:'混合：物理节点池 + RU 配额（推荐生产）'};
+
+// mock topology
+const stores=[
+  {id:1,zone:'east',host:'tikv-01',used:42,rg:3200},
+  {id:2,zone:'east',host:'tikv-02',used:55,rg:2900},
+  {id:3,zone:'west',host:'tikv-03',used:30,rg:2100},
+  {id:4,zone:'west',host:'tikv-04',used:61,rg:2400},
+  {id:5,zone:'dmz',host:'tikv-05',used:18,rg:900},
+  {id:6,zone:'dmz',host:'tikv-06',used:25,rg:1100},
+];
+let selectedStores=new Set();
+
+function iso(){return document.querySelector('#isoSeg input:checked')?.parentElement.dataset.v||'LOGICAL';}
+function $(id){return document.getElementById(id);}
+function esc(s){return (s||'').replace(/[<>]/g,c=>({'<':'&lt;','>':'&gt;'}[c]));}
+
+function renderSteps(){
+  $('steps').innerHTML=[...Array(TOTAL)].map((_,i)=>{
+    const n=i+1; const cls=n<cur?'done':n===cur?'active':'';
+    return `<div class="step ${cls}"><span><div class="dot">${n<cur?'✓':n}</div><div>${['基础信息','节点池/标签','放置策略','资源管控','库与用户','确认'][i]}</div></span></div>`;
+  }).join('');
+}
+
+function renderTopo(){
+  const zones=[...new Set(stores.map(s=>s.zone))];
+  $('topo').innerHTML=zones.map(z=>{
+    const cards=stores.filter(s=>s.zone===z).map(s=>{
+      const sel=selectedStores.has(s.id)?'sel':'';
+      const tag=selectedStores.has(s.id)?'<span class="tag green">已选</span>':'';
+      return `<div class="store ${sel}" onclick="toggleStore(${s.id})">
+        <div class="id">store ${s.id} ${tag}</div>
+        <div>host: ${s.host}</div>
+        <div>region 数: ${s.rg} · 用量 ${s.used}%</div>
+        <div class="bar"><i style="width:${s.used}%"></i></div>
+      </div>`;}).join('');
+    return `<div class="zone-title">zone = ${z}</div><div style="display:contents">${cards}</div>`;
+  }).join('');
+  updatePool();
+}
+function toggleStore(id){ if(iso()==='LOGICAL')return; selectedStores.has(id)?selectedStores.delete(id):selectedStores.add(id); renderTopo(); }
+function updatePool(){
+  const need=iso()!=='LOGICAL';
+  const cnt=selectedStores.size;
+  $('poolSummary').textContent=need?`${cnt} 个节点已选`:'逻辑隔离，跳过';
+  $('topo').style.opacity=need?1:.45;
+  $('topo').style.pointerEvents=need?'':'none';
+}
+
+function val(id){return $(id)?.value??'';}
+function chk(id){return $(id)?.checked;}
+
+function buildSQL(){
+  const t=val('tenantName')||'tenant', I=iso(), ru=val('ru'), pr=val('primaryRegion'), regs=val('regions'),
+        v=val('voters'), f=val('followers'), surv=val('survival'), pri=val('priority'),
+        burst=chk('burstable')?'\n    BURSTABLE':'', lk=I==='LOGICAL'?'-':'zone', lv=I==='LOGICAL'?'shared':t;
+  let sql='';
+  sql+=`<span class="cmt">-- [1] 确保所选 store 已打租户标签（PD API，幂等）</span>\n`;
+  if(I!=='LOGICAL'){[...selectedStores].forEach(id=>sql+=`POST /pd/api/v1/store/${id}/label  <span class="cmt"># {"key":"zone","value":"${lv}"}</span>\n`);}
+  else sql+=`<span class="cmt">-- 逻辑隔离，跳过标签</span>\n`;
+  sql+=`\n<span class="cmt">-- [2] 放置策略</span>\n`;
+  if(I==='LOGICAL') sql+=`<span class="cmt">-- 逻辑隔离：不建 policy，共享默认放置</span>\n`;
+  else sql+=`<span class="kw">CREATE PLACEMENT POLICY</span> t_${t}_pol\n    PRIMARY_REGION = <span class="str">"${pr}"</span>\n    REGIONS = <span class="str">"${regs}"</span>\n    VOTERS = <span class="num">${v}</span>\n    FOLLOWERS = <span class="num">${f}</span>\n    LEADER_CONSTRAINTS = <span class="str">"[+${lk}=${lv}]"</span>\n    FOLLOWER_CONSTRAINTS = <span class="str">"[+${lk}=${lv}]"</span>\n    SURVIVAL_PREFERENCES = <span class="str">"[${surv}]"</span>;\n`;
+  sql+=`\n<span class="cmt">-- [3] 资源组</span>\n<span class="kw">CREATE RESOURCE GROUP</span> t_${t}_rg\n    RU_PER_SEC = <span class="num">${ru}</span>${burst}\n    PRIORITY = ${pri};\n`;
+  sql+=`\n<span class="cmt">-- [4] 建库并绑定 policy</span>\n`;
+  val('dbs').split(',').map(s=>s.trim()).filter(Boolean).forEach(d=>{
+    sql+=`<span class="kw">CREATE DATABASE</span> t_${t}_${d}`+(I!=='LOGICAL'?` <span class="kw">PLACEMENT POLICY</span> = t_${t}_pol`:'')+`;\n`;
+  });
+  sql+=`\n<span class="cmt">-- [5] 建用户并绑定资源组</span>\n`;
+  val('users').split(',').map(s=>s.trim()).filter(Boolean).forEach(u=>{
+    sql+=`<span class="kw">CREATE USER</span> '<span class="str">${u}</span>'@'%' IDENTIFIED BY <span class="str">'***'</span> <span class="kw">RESOURCE GROUP</span> t_${t}_rg;\n`;
+  });
+  sql+=`\n<span class="cmt">-- [6] 写入元数据 mt_console.tenant（含回滚补偿步骤记录于 job）</span>`;
+  return sql;
+}
+
+function render(){
+  renderSteps();
+  const I=iso();
+  $('isoHint').textContent='已选：'+I+' — '+isoText[I];
+  document.querySelectorAll('#isoSeg label').forEach(l=>l.classList.toggle('sel',l.dataset.v===I));
+  updatePool();
+  // review
+  const dbs=val('dbs'),users=val('users');
+  $('review').innerHTML=`
+    <dt>租户</dt><dd><b>${esc(val('tenantName'))}</b></dd>
+    <dt>隔离级别</dt><dd><span class="tag blue">${I}</span></dd>
+    <dt>节点池</dt><dd>${I==='LOGICAL'?'<span class="tag amber">共享</span>':`${selectedStores.size} 个 store（zone=${esc(val('tenantName'))}）`}</dd>
+    <dt>放置策略</dt><dd>${I==='LOGICAL'?'—（默认）':`t_${esc(val('tenantName'))}_pol`}</dd>
+    <dt>资源组</dt><dd>t_${esc(val('tenantName'))}_rg · ${val('ru')} RU/s · ${val('priority')}${chk('burstable')?' · BURSTABLE':''}</dd>
+    <dt>数据库</dt><dd>${dbs.split(',').filter(Boolean).map(d=>`<span class="tag">t_${esc(val('tenantName'))}_${esc(d.trim())}</span>`).join(' ')||'—'}</dd>
+    <dt>用户</dt><dd>${users.split(',').filter(Boolean).map(u=>`<span class="tag">${esc(u.trim())}</span>`).join(' ')||'—'}</dd>`;
+  $('sqlPreview').innerHTML=buildSQL();
+  const dry=chk('dryrun');
+  $('dryRunNote').innerHTML=dry?`⚠️ 灰度模式：policy 将先绑定到 <b>1 张表</b>，PD 调度稳定后再全库绑定（避免一次性大规模 Region 重调度）。`:'';
+}
+
+function nav(d){
+  const n=cur+d; if(n<1||n>TOTAL)return;
+  cur=n;
+  document.querySelectorAll('.pane').forEach(p=>p.style.display=(+p.dataset.step===cur?'block':'none'));
+  $('prev').disabled=(cur===1);
+  $('next').textContent=(cur===TOTAL?'创建租户（编排执行）':'下一步');
+  render();
+}
+// iso segment click
+document.querySelectorAll('#isoSeg label').forEach(l=>l.addEventListener('click',()=>{setTimeout(render,0);}));
+renderTopo(); render();
+</script>
+</body>
+</html>

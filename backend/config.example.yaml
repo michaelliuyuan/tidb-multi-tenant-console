@@ -1,0 +1,24 @@
+# 运行配置示例 —— 复制为 config.yaml 并填入你自己的集群连接信息。
+# 注意：config.yaml 已在 .gitignore 中（含真实凭据，不要提交到版本库）。
+server:
+  addr: ":8088"
+
+# 元数据库：指向被管控的 TiDB 集群；db 留空，首次启动由迁移自动创建 mt_console schema。
+metadata:
+  host: "127.0.0.1"
+  port: 4000
+  user: "root"
+  password: "<YOUR_METADATA_DB_PASSWORD>"
+  db: ""
+
+clusters:
+  - name: "example-cluster"
+    tidb_host: "127.0.0.1"
+    tidb_port: 4000
+    tidb_user: "root"
+    tidb_password: "<YOUR_TIDB_PASSWORD>"
+    pd_endpoint: "http://127.0.0.1:2379"
+    prometheus_url: "http://127.0.0.1:9090"
+
+auth:
+  admin_token: "<YOUR_ADMIN_TOKEN>"

@@ -1,0 +1,57 @@
+# ===== 构建产物 / binaries =====
+# Go 后端编译产物
+console-server
+console-server.exe
+console-server.new
+*.exe
+*.dll
+*.so
+*.dylib
+
+# 前端构建产物
+frontend/dist/
+dist-server/
+backend/dist-server/
+
+# 部署打包产物
+*.tar.gz
+backend/dist-deploy*.tar.gz
+
+# ===== 依赖 =====
+node_modules/
+frontend/node_modules/
+
+# ===== 配置 / 密钥（含真实凭据，绝不提交）=====
+config.yaml
+config.local.yaml
+backend/config.yaml
+backend/config.local.yaml
+*.env
+.env
+.env.local
+
+# ===== 本地运行时文件 =====
+*.log
+console.log
+nohup.out
+
+# ===== IDE / 编辑器 =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== TypeScript 增量构建缓存 =====
+*.tsbuildinfo
+frontend/tsconfig.tsbuildinfo
+
+# ===== 临时 / 测试输出 =====
+*.bak
+*.bak.*
+tmp/

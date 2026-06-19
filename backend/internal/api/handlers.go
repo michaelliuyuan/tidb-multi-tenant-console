@@ -1506,16 +1506,17 @@ func (a *API) storeResource(c *gin.Context) {
 			return
 	}
 
-	var storeAddr string
+	var storeAddr, statusAddr string
 	for _, s := range stores {
-			if s.ID == sid {
-				storeAddr = s.Address
-				break
-			}
+		if s.ID == sid {
+			storeAddr = s.Address
+			statusAddr = s.StatusAddress
+			break
+		}
 	}
 	if storeAddr == "" {
-			c.JSON(404, gin.H{"error": "store not found"})
-			return
+		c.JSON(404, gin.H{"error": "store not found"})
+		return
 	}
 
 	// 用集群密码作为 TiKV 节点 SSH 密码
@@ -1528,21 +1529,18 @@ func (a *API) storeResource(c *gin.Context) {
 
 	// 从 Prometheus 获取 TiKV 进程的 CPU 使用率
 	// rate(process_cpu_seconds_total[5m]) * 100 = CPU 使用率%（1 核 = 100%）
+	// 注意：Prometheus 中 TiKV 的 instance 标签用的是 status_address（如 20180），不是主端口（如 20160）
 	cpuUsagePct := 0.0
 	if cl.PrometheusURL != "" {
 		prom := store.NewPromClient(cl.PrometheusURL)
-		host := strings.SplitN(storeAddr, ":", 2)[0]
-		port := ""
-		if parts := strings.SplitN(storeAddr, ":", 2); len(parts) == 2 {
-			port = parts[1]
+		// 优先用 status_address（Prometheus 里的 instance 标签），回退到主地址
+		candidates := []string{}
+		if statusAddr != "" {
+			candidates = append(candidates, statusAddr)
 		}
-		// TiKV 的 instance 标签通常为 host:port（status_address）
-		// 尝试用地址匹配
-		queries := []string{
-			fmt.Sprintf(`rate(process_cpu_seconds_total{job="tikv",instance="%s"}[5m]) * 100`, storeAddr),
-			fmt.Sprintf(`rate(process_cpu_seconds_total{job="tikv",instance="%s"}[5m]) * 100`, host+":"+port),
-		}
-		for _, q := range queries {
+		candidates = append(candidates, storeAddr)
+		for _, addr := range candidates {
+			q := fmt.Sprintf(`rate(process_cpu_seconds_total{job="tikv",instance="%s"}[5m]) * 100`, addr)
 			series, qErr := prom.Query(q)
 			if qErr == nil && len(series) > 0 && len(series[0].Values) > 0 {
 				cpuUsagePct = series[0].Values[0][1]

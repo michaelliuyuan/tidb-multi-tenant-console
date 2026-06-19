@@ -4,7 +4,7 @@ import {
   message, Typography, Checkbox, Tag, Divider, Radio,
 } from 'antd'
 import { useNavigate } from 'react-router-dom'
-import { api, Store, PlacementPolicy } from '../api/client'
+import { api, Store, PlacementPolicy, PlacementLabel } from '../api/client'
 import { useCluster } from '../cluster-context'
 
 const { Text } = Typography
@@ -21,6 +21,7 @@ export default function TenantCreate() {
   const [policies, setPolicies] = useState<PlacementPolicy[]>([])
   const [databases, setDatabases] = useState<string[]>([])
   const [resourceGroups, setResourceGroups] = useState<string[]>([])
+  const [placementLabels, setPlacementLabels] = useState<PlacementLabel[]>([])
 
   // 模式切换
   const [dbMode, setDbMode] = useState<'existing' | 'new'>('new')
@@ -36,11 +37,13 @@ export default function TenantCreate() {
       api.listPlacementPolicies(cid).catch(() => [] as PlacementPolicy[]),
       api.listDatabases(cid).catch(() => []),
       api.listResourceGroups(cid).catch(() => []),
-    ]).then(([s, p, dbs, rgs]) => {
+      api.listPlacementLabels(cid).catch(() => [] as PlacementLabel[]),
+    ]).then(([s, p, dbs, rgs, lbls]) => {
       setStores(s as Store[])
       setPolicies(p as PlacementPolicy[])
       setDatabases((dbs as any[]).map(d => d.name))
       setResourceGroups((rgs as any[]).map(r => r.name))
+      setPlacementLabels(lbls as PlacementLabel[])
     })
   }, [cid])
 
@@ -63,7 +66,7 @@ export default function TenantCreate() {
       const isoLevel = (v.policy_mode === 'existing' || v.policy_mode === 'new') ? 'HYBRID' : 'LOGICAL'
       await api.createTenant({
         name: v.name, cluster_id: v.cluster_id, isolation_level: isoLevel,
-        label_key: 'app',
+        label_key: labelKey,
         label_value: v.label_value || v.name,
         placement: {
           primary_region: v.primary_region || '',
@@ -110,6 +113,12 @@ export default function TenantCreate() {
   const policyOptions = policies.map(p => ({ value: p.policy_name, label: p.policy_name }))
   const rgOptions = resourceGroups.map(r => ({ value: r, label: r }))
   const dbOptions = databases.map(d => ({ value: d, label: d }))
+
+  // 从集群已有 placement labels 中提取 "app" 标签的可选值
+  const labelKey = 'app'
+  const appLabel = placementLabels.find(l => l.key === labelKey)
+  const labelValueOptions = (appLabel?.values || []).map(v => ({ value: v, label: v }))
+  const hasLabelValues = labelValueOptions.length > 0
 
   return (
     <Card title="创建租户">
@@ -179,10 +188,14 @@ export default function TenantCreate() {
               <Form.Item name="policy_name" label="新策略名称">
                 <Input placeholder="自动填充 t_{租户名}_pol" />
               </Form.Item>
-              <Form.Item name="label_value" label="匹配的标签值（label_value）"
-                tooltip="TiKV 节点上已有的标签值，放置策略将约束数据到这些节点。例如 app=app1 则填 app1"
-                rules={[{ required: true, message: '请输入匹配的标签值' }]}>
-                <Input placeholder="例如：app1（对应 TiKV 节点上 app 标签的值）" />
+              <Form.Item name="label_value" label={`匹配的标签值（${labelKey}=）`}
+                tooltip={`TiKV 节点上已有的标签值，放置策略将约束数据到这些节点。从集群现有 "${labelKey}" 标签值中选择。`}
+                rules={[{ required: true, message: '请选择或输入匹配的标签值' }]}>
+                {hasLabelValues ? (
+                  <Select showSearch placeholder={`选择 "${labelKey}" 标签值`} options={labelValueOptions} />
+                ) : (
+                  <Input placeholder={`集群暂无 "${labelKey}" 标签，请手动输入（需先在 TiKV 节点上打标签）`} />
+                )}
               </Form.Item>
             </>
           )}

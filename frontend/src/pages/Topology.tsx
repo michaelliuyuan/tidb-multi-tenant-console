@@ -127,6 +127,8 @@ function TiKVCard({ node }: { node: TiKVNode }) {
   const isBound = !!binding
   const canBind = up && !tiflash && !isBound
 
+  // CPU 配额（systemd CPUQuota，如 200 = 2 核）；注意这是配额上限，不是使用率
+
   return (
     <Card
       size="small"
@@ -189,14 +191,9 @@ function TiKVCard({ node }: { node: TiKVNode }) {
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
               <Text type="secondary" style={{ fontSize: 11 }}>{'CPU'}</Text>
-              <Space size={4}>
-                {cpuQ > 0 && <Text style={{ fontSize: 11 }}>{cpuQ}%</Text>}
-                <Tag style={{ fontSize: 9, margin: 0, lineHeight: '16px' }} color={cpuLimitFmt === '不限' ? 'default' : 'blue'}>{'上限: ' + cpuLimitFmt}</Tag>
-              </Space>
+              <Tag style={{ fontSize: 9, margin: 0, lineHeight: '16px' }} color={cpuLimitFmt === '不限' ? 'default' : 'blue'}>{'上限: ' + cpuLimitFmt}</Tag>
             </div>
-            {cpuQ > 0
-              ? <Progress percent={Math.min(cpuQ, 100)} size="small" strokeColor="#1677ff" showInfo={false} />
-              : <Text type="secondary" style={{ fontSize: 10 }}>{'未获取使用率'}</Text>}
+            <Text type="secondary" style={{ fontSize: 10 }}>配额限制（使用率需通过监控查看）</Text>
           </div>
         )}
 
@@ -385,11 +382,11 @@ function TopologyTable({ stores, resources, stm }: {
       },
     },
     {
-      title: 'CPU', width: 110,
+      title: 'CPU 配额', width: 100,
       render: (_: unknown, r: Store) => {
         const res = resources[r.id]
-        if (!res || !res.cpu_quota || res.cpu_quota <= 0) return <Text type="secondary" style={{ fontSize: 11 }}>-</Text>
-        return <Text style={{ fontSize: 12 }}>{res.cpu_quota}%</Text>
+        if (!res || !res.cpu_quota || res.cpu_quota <= 0) return <Text type="secondary" style={{ fontSize: 11 }}>不限</Text>
+        return <Text style={{ fontSize: 12 }}>{(res.cpu_quota / 100).toFixed(1)} 核</Text>
       },
     },
     {

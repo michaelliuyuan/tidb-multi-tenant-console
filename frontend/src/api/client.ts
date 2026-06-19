@@ -64,7 +64,7 @@ export interface ClusterHealth {
 export interface StoreResource {
   store_id: number; memory_limit: string; memory_limit_fmt: string
   memory_current: number; memory_usage_pct: number
-  cpu_quota: number; cpu_usage_nsec: number
+  cpu_quota: number; cpu_usage_nsec: number; cpu_usage_pct: number
   read_bandwidth: string; write_bandwidth: string
   block_cache_size: string; resource_control: boolean
 }

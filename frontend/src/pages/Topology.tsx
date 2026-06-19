@@ -128,6 +128,7 @@ function TiKVCard({ node }: { node: TiKVNode }) {
   const canBind = up && !tiflash && !isBound
 
   // CPU 配额（systemd CPUQuota，如 200 = 2 核）；注意这是配额上限，不是使用率
+  const cpuUsagePct = res?.cpu_usage_pct ?? 0
 
   return (
     <Card
@@ -191,9 +192,14 @@ function TiKVCard({ node }: { node: TiKVNode }) {
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
               <Text type="secondary" style={{ fontSize: 11 }}>{'CPU'}</Text>
-              <Tag style={{ fontSize: 9, margin: 0, lineHeight: '16px' }} color={cpuLimitFmt === '不限' ? 'default' : 'blue'}>{'上限: ' + cpuLimitFmt}</Tag>
+              <Space size={4}>
+                {cpuUsagePct > 0 && <Text style={{ fontSize: 11, color: cpuUsagePct > 85 ? '#ff4d4f' : undefined }}>{Math.round(cpuUsagePct)}%</Text>}
+                <Tag style={{ fontSize: 9, margin: 0, lineHeight: '16px' }} color={cpuLimitFmt === '不限' ? 'default' : 'blue'}>{'上限: ' + cpuLimitFmt}</Tag>
+              </Space>
             </div>
-            <Text type="secondary" style={{ fontSize: 10 }}>配额限制（使用率需通过监控查看）</Text>
+            {cpuUsagePct > 0
+              ? <Progress percent={Math.min(Math.round(cpuUsagePct), 100)} size="small" strokeColor={cpuUsagePct > 85 ? '#ff4d4f' : '#1677ff'} showInfo={false} />
+              : <Text type="secondary" style={{ fontSize: 10 }}>使用率需配置 Prometheus</Text>}
           </div>
         )}
 
@@ -382,11 +388,20 @@ function TopologyTable({ stores, resources, stm }: {
       },
     },
     {
-      title: 'CPU 配额', width: 100,
+      title: 'CPU', width: 130,
       render: (_: unknown, r: Store) => {
         const res = resources[r.id]
-        if (!res || !res.cpu_quota || res.cpu_quota <= 0) return <Text type="secondary" style={{ fontSize: 11 }}>不限</Text>
-        return <Text style={{ fontSize: 12 }}>{(res.cpu_quota / 100).toFixed(1)} 核</Text>
+        if (!res) return <Text type="secondary" style={{ fontSize: 11 }}>-</Text>
+        const pct = res.cpu_usage_pct ?? 0
+        const quota = res.cpu_quota && res.cpu_quota > 0 ? `${(res.cpu_quota / 100).toFixed(1)} 核` : '不限'
+        return (
+          <div>
+            {pct > 0
+              ? <Text style={{ fontSize: 12, color: pct > 85 ? '#ff4d4f' : undefined }}>{Math.round(pct)}%</Text>
+              : <Text type="secondary" style={{ fontSize: 11 }}>N/A</Text>}
+            <Text type="secondary" style={{ fontSize: 10, marginLeft: 4 }}>/ {quota}</Text>
+          </div>
+        )
       },
     },
     {

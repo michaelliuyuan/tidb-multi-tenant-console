@@ -1522,22 +1522,48 @@ func (a *API) storeResource(c *gin.Context) {
 	src := store.NewStoreResourceClient(cl.Password)
 	res, err := src.FetchResource(storeAddr)
 	if err != nil {
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 从 Prometheus 获取 TiKV 进程的 CPU 使用率
+	// rate(process_cpu_seconds_total[5m]) * 100 = CPU 使用率%（1 核 = 100%）
+	cpuUsagePct := 0.0
+	if cl.PrometheusURL != "" {
+		prom := store.NewPromClient(cl.PrometheusURL)
+		host := strings.SplitN(storeAddr, ":", 2)[0]
+		port := ""
+		if parts := strings.SplitN(storeAddr, ":", 2); len(parts) == 2 {
+			port = parts[1]
+		}
+		// TiKV 的 instance 标签通常为 host:port（status_address）
+		// 尝试用地址匹配
+		queries := []string{
+			fmt.Sprintf(`rate(process_cpu_seconds_total{job="tikv",instance="%s"}[5m]) * 100`, storeAddr),
+			fmt.Sprintf(`rate(process_cpu_seconds_total{job="tikv",instance="%s"}[5m]) * 100`, host+":"+port),
+		}
+		for _, q := range queries {
+			series, qErr := prom.Query(q)
+			if qErr == nil && len(series) > 0 && len(series[0].Values) > 0 {
+				cpuUsagePct = series[0].Values[0][1]
+				break
+			}
+		}
 	}
 
 	c.JSON(200, gin.H{
-			"store_id":         sid,
-			"memory_limit":     res.MemoryLimit,
-			"memory_limit_fmt": formatMemoryFmt(res.MemoryLimit),
-			"memory_current":   res.MemoryCurrent,
-			"memory_usage_pct": res.MemoryUsagePct,
-			"cpu_quota":        res.CPUQuota,
-			"cpu_usage_nsec":   res.CPUUsageNSec,
-			"read_bandwidth":   res.ReadBandwidth,
-			"write_bandwidth":  res.WriteBandwidth,
-			"block_cache_size": res.BlockCacheSize,
-			"resource_control": res.ResourceControl,
+		"store_id":         sid,
+		"memory_limit":     res.MemoryLimit,
+		"memory_limit_fmt": formatMemoryFmt(res.MemoryLimit),
+		"memory_current":   res.MemoryCurrent,
+		"memory_usage_pct": res.MemoryUsagePct,
+		"cpu_quota":        res.CPUQuota,
+		"cpu_usage_nsec":   res.CPUUsageNSec,
+		"cpu_usage_pct":    cpuUsagePct,
+		"read_bandwidth":   res.ReadBandwidth,
+		"write_bandwidth":  res.WriteBandwidth,
+		"block_cache_size": res.BlockCacheSize,
+		"resource_control": res.ResourceControl,
 	})
 }
 

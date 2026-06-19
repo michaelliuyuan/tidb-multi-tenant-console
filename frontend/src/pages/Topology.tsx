@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Spin, Empty, Space, Typography, Tag, Progress, Tooltip, Card, Row, Col,
-  Statistic, Badge, Collapse, Alert,
+  Statistic, Badge, Collapse, Alert, Table, Segmented,
 } from 'antd'
 import {
   GlobalOutlined, CloudServerOutlined, DatabaseOutlined, HddOutlined,
-  ApartmentOutlined,
+  ApartmentOutlined, AppstoreOutlined, UnorderedListOutlined,
 } from '@ant-design/icons'
-import { api, Store, StoreResource, Tenant } from '../api/client'
+import type { TableColumnsType } from 'antd'
+import { api, Store, StoreResource, Tenant, KV } from '../api/client'
 import { useCluster } from '../cluster-context'
 
 const { Text, Title } = Typography
@@ -40,6 +41,19 @@ function compareIP(a: string, b: string): number {
     if (da !== db) return da - db
   }
   return 0
+}
+
+// 标签排序优先级：zone > region > rack > host > app > 其余按字母序
+const LABEL_ORDER = ['zone', 'region', 'rack', 'host', 'app']
+function sortLabels(labels: KV[]): KV[] {
+  return [...labels].sort((a, b) => {
+    const ia = LABEL_ORDER.indexOf(a.key)
+    const ib = LABEL_ORDER.indexOf(b.key)
+    if (ia !== -1 && ib !== -1) return ia - ib
+    if (ia !== -1) return -1
+    if (ib !== -1) return 1
+    return a.key.localeCompare(b.key)
+  })
 }
 
 // ---- hierarchical tree types ----
@@ -188,7 +202,7 @@ function TiKVCard({ node }: { node: TiKVNode }) {
 
         {(store.labels || []).length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, borderTop: '1px solid #f0f0f0', paddingTop: 4 }}>
-            {(store.labels || []).filter(l => l.key !== 'engine').map(l => (
+            {sortLabels((store.labels || []).filter(l => l.key !== 'engine')).map(l => (
               <Tag key={l.key} style={{ fontSize: 10, margin: 0, lineHeight: '16px' }}
                 color={isBound && l.key === binding!.labelKey ? 'blue' : 'default'}>
                 {l.key}={l.value}
@@ -289,6 +303,131 @@ function ZoneCard({ zone, zi }: { zone: ZoneNode; zi: number }) {
   )
 }
 
+// ---- Table view ----
+function TopologyTable({ stores, resources, stm }: {
+  stores: Store[]
+  resources: Record<number, StoreResource>
+  stm: Map<number, { name: string; isolation: string; labelKey: string; labelValue: string }>
+}) {
+  const rows = stores.slice().sort((a, b) => {
+    const ipCmp = compareIP(ipOf(a), ipOf(b))
+    if (ipCmp !== 0) return ipCmp
+    return portOf(a) - portOf(b)
+  })
+
+  const columns: TableColumnsType<Store> = [
+    {
+      title: 'Store ID', dataIndex: 'id', width: 90, fixed: 'left',
+      render: (id: number) => <Text strong>#{id}</Text>,
+    },
+    {
+      title: '地址', dataIndex: 'address', width: 180,
+      render: (addr: string) => <Text copyable style={{ fontSize: 13 }}>{addr}</Text>,
+    },
+    {
+      title: '状态', dataIndex: 'status_name', width: 80,
+      render: (s: string) => {
+        const up = s === 'Up'
+        const tf = false
+        return <Badge status={up ? 'success' : 'error'} text={up ? 'UP' : s} />
+      },
+    },
+    {
+      title: '类型', width: 70,
+      render: (_: unknown, r: Store) => isTiFlash(r)
+        ? <Tag color="orange" style={{ margin: 0 }}>TiFlash</Tag>
+        : <Tag color="green" style={{ margin: 0 }}>TiKV</Tag>,
+    },
+    {
+      title: 'Zone', width: 80,
+      render: (_: unknown, r: Store) => getLabel(r, 'zone') || <Text type="secondary">-</Text>,
+    },
+    {
+      title: 'Region', width: 80,
+      render: (_: unknown, r: Store) => getLabel(r, 'region') || <Text type="secondary">-</Text>,
+    },
+    {
+      title: 'Rack', width: 80,
+      render: (_: unknown, r: Store) => getLabel(r, 'rack') || <Text type="secondary">-</Text>,
+    },
+    {
+      title: 'Host', width: 90,
+      render: (_: unknown, r: Store) => getLabel(r, 'host') || <Text type="secondary">-</Text>,
+    },
+    {
+      title: '磁盘', width: 120,
+      render: (_: unknown, r: Store) => {
+        const pct = pctUsed(r.capacity, r.available)
+        return (
+          <div>
+            <Text style={{ fontSize: 12, color: pct > 80 ? '#ff4d4f' : undefined }}>{pct}%</Text>
+            <Progress percent={pct} size="small" strokeColor={pct > 80 ? '#ff4d4f' : '#52c41a'} showInfo={false} />
+            <Text type="secondary" style={{ fontSize: 10 }}>{fmtB(r.available)} / {fmtB(r.capacity)}</Text>
+          </div>
+        )
+      },
+    },
+    {
+      title: 'Regions', dataIndex: 'region_count', width: 80,
+      render: (n: number) => <Text type="secondary">{n}</Text>,
+    },
+    {
+      title: '内存', width: 110,
+      render: (_: unknown, r: Store) => {
+        const res = resources[r.id]
+        if (!res || !res.memory_usage_pct) return <Text type="secondary" style={{ fontSize: 11 }}>-</Text>
+        const pct = Math.round(res.memory_usage_pct)
+        return (
+          <Space size={4}>
+            <Text style={{ fontSize: 12, color: pct > 85 ? '#ff4d4f' : undefined }}>{pct}%</Text>
+          </Space>
+        )
+      },
+    },
+    {
+      title: 'CPU', width: 110,
+      render: (_: unknown, r: Store) => {
+        const res = resources[r.id]
+        if (!res || !res.cpu_quota || res.cpu_quota <= 0) return <Text type="secondary" style={{ fontSize: 11 }}>-</Text>
+        return <Text style={{ fontSize: 12 }}>{res.cpu_quota}%</Text>
+      },
+    },
+    {
+      title: '租户绑定', width: 120,
+      render: (_: unknown, r: Store) => {
+        const b = stm.get(r.id)
+        return b ? <Tag color="blue" style={{ margin: 0 }}>{b.name}</Tag> : null
+      },
+    },
+    {
+      title: '标签', width: 200,
+      render: (_: unknown, r: Store) => (
+        <Space size={2} wrap>
+          {sortLabels((r.labels || []).filter(l => l.key !== 'engine')).map(l => (
+            <Tag key={l.key} style={{ fontSize: 10, margin: 0, lineHeight: '16px' }}
+              color={stm.get(r.id)?.labelKey === l.key ? 'blue' : 'default'}>
+              {l.key}={l.value}
+            </Tag>
+          ))}
+        </Space>
+      ),
+    },
+  ]
+
+  return (
+    <Card>
+      <Table
+        columns={columns}
+        dataSource={rows}
+        rowKey="id"
+        size="small"
+        scroll={{ x: 1400 }}
+        pagination={false}
+      />
+    </Card>
+  )
+}
+
 // ---- main component ----
 export default function Topology() {
   const { cid } = useCluster()
@@ -296,7 +435,7 @@ export default function Topology() {
   const [tenants, setTenants] = useState<Tenant[]>([])
   const [loading, setLoading] = useState(false)
   const [resources, setResources] = useState<Record<number, StoreResource>>({})
-
+  const [viewMode, setViewMode] = useState<'card' | 'table'>('card')
   useEffect(() => {
     if (!cid) return
     setLoading(true); setResources({})
@@ -374,16 +513,30 @@ export default function Topology() {
         <Card><Empty description="无 TiKV 节点" /></Card>
       ) : (
         <>
-          {totalZones === 1 && (
+          {totalZones === 1 && viewMode === 'card' && (
             <Alert
               type="warning"
               showIcon
               message="当前仅 1 个 Zone，无法实现跨机房高可用。建议至少 3 个 Zone。"
             />
           )}
-          {tree.zones.map((z, zi) => (
-            <ZoneCard key={z.zone} zone={z} zi={zi} />
-          ))}
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Segmented
+              value={viewMode}
+              onChange={v => setViewMode(v as 'card' | 'table')}
+              options={[
+                { label: '卡片视图', value: 'card', icon: <AppstoreOutlined /> },
+                { label: '表格视图', value: 'table', icon: <UnorderedListOutlined /> },
+              ]}
+            />
+          </div>
+          {viewMode === 'card' ? (
+            tree.zones.map((z, zi) => (
+              <ZoneCard key={z.zone} zone={z} zi={zi} />
+            ))
+          ) : (
+            <TopologyTable stores={stores} resources={resources} stm={stm} />
+          )}
         </>
       )}
     </Space>

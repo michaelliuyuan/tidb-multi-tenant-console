@@ -29,6 +29,18 @@ function getLabel(s: Store, key: string): string {
   return (s.labels || []).find(l => l.key === key)?.value ?? ''
 }
 function ipOf(s: Store): string { return (s.address || '').split(':')[0] || 'unknown' }
+function portOf(s: Store): number { const parts = (s.address || '').split(':'); const p = parseInt(parts[1], 10); return isNaN(p) ? 0 : p }
+
+// IP 地址比较：将点分十进制转为数值数组逐段比较（正确处理 10.0.0.2 < 10.0.0.10）
+function compareIP(a: string, b: string): number {
+  const pa = a.split('.').map(n => parseInt(n, 10) || 0)
+  const pb = b.split('.').map(n => parseInt(n, 10) || 0)
+  for (let i = 0; i < 4; i++) {
+    const da = pa[i] || 0, db = pb[i] || 0
+    if (da !== db) return da - db
+  }
+  return 0
+}
 
 // ---- hierarchical tree types ----
 
@@ -61,7 +73,12 @@ function buildHierarchy(stores: Store[]): TopologyTree {
       region,
       racks: Object.entries(rackMap).map(([rack, hostMap]) => ({
         rack,
-        hosts: Object.entries(hostMap).map(([host, tikvs]) => ({ host, tikvs })),
+        hosts: Object.entries(hostMap)
+          .map(([host, tikvs]) => ({
+            host,
+            tikvs: tikvs.slice().sort((a, b) => portOf(a.store) - portOf(b.store)),
+          }))
+          .sort((a, b) => compareIP(a.host, b.host)),
       })),
     })),
   }))

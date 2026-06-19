@@ -131,7 +131,10 @@ function TiKVCard({ node }: { node: TiKVNode }) {
   const cpuUsagePct = res?.cpu_usage_pct ?? 0
   // 相对于配额的使用率（使用率 / 配额 * 100），>100% 表示超配额
   const cpuVsQuotaPct = cpuUsagePct > 0 && cpuQ > 0 ? (cpuUsagePct / cpuQ) * 100 : 0
-  const cpuCores = (cpuUsagePct / 100).toFixed(1)
+  // 小于 0.1 核时显示百分比（避免 0.0 核的困惑），否则显示核数
+  const cpuDisplay = cpuUsagePct < 10
+    ? `${cpuUsagePct.toFixed(1)}%`
+    : `${(cpuUsagePct / 100).toFixed(1)} 核`
 
   return (
     <Card
@@ -196,7 +199,7 @@ function TiKVCard({ node }: { node: TiKVNode }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
               <Text type="secondary" style={{ fontSize: 11 }}>{'CPU'}</Text>
               <Space size={4}>
-                {cpuUsagePct > 0 && <Text style={{ fontSize: 11, color: cpuVsQuotaPct > 100 ? '#ff4d4f' : undefined }}>{cpuCores} 核</Text>}
+                {cpuUsagePct > 0 && <Text style={{ fontSize: 11, color: cpuVsQuotaPct > 100 ? '#ff4d4f' : undefined }}>{cpuDisplay}</Text>}
                 <Tag style={{ fontSize: 9, margin: 0, lineHeight: '16px' }} color={cpuLimitFmt === '不限' ? 'default' : 'blue'}>{'上限: ' + cpuLimitFmt}</Tag>
               </Space>
             </div>
@@ -399,11 +402,14 @@ function TopologyTable({ stores, resources, stm }: {
         const quotaPct = res.cpu_quota ?? 0
         const overQuota = quotaPct > 0 && pct > quotaPct
         const quota = quotaPct > 0 ? `${(quotaPct / 100).toFixed(1)} 核` : '不限'
+        const usageDisplay = pct > 0 && pct < 10
+          ? `${pct.toFixed(1)}%`
+          : pct > 0
+            ? `${(pct / 100).toFixed(1)} 核`
+            : 'N/A'
         return (
           <div>
-            {pct > 0
-              ? <Text style={{ fontSize: 12, color: overQuota ? '#ff4d4f' : undefined }}>{(pct / 100).toFixed(1)} 核</Text>
-              : <Text type="secondary" style={{ fontSize: 11 }}>N/A</Text>}
+            <Text style={{ fontSize: 12, color: overQuota ? '#ff4d4f' : undefined }}>{usageDisplay}</Text>
             <Text type="secondary" style={{ fontSize: 10, marginLeft: 4 }}>/ {quota}</Text>
           </div>
         )

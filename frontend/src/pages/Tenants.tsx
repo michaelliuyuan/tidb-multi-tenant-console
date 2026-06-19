@@ -132,6 +132,7 @@ export default function Tenants() {
         <Alert type="info" showIcon message="请在顶部选择集群后查看租户。" />
       ) : (
         <Table rowKey="id" loading={loading} dataSource={tenants} pagination={false}
+          scroll={{ x: 'max-content' }} tableLayout="fixed"
           expandable={{ onExpand, expandedRowRender: (t) => (
             <TenantAssoc
               detail={detail[String(t.id)]}
@@ -141,11 +142,11 @@ export default function Tenants() {
             />
           ) }}
           columns={[
-            { title: '租户', dataIndex: 'name' },
-            { title: '隔离级别', dataIndex: 'isolation_level',
+            { title: '租户', dataIndex: 'name', width: 140 },
+            { title: '隔离级别', dataIndex: 'isolation_level', width: 110,
               render: (v: string) => <Tag color={isoColor[v]}>{v}</Tag> },
-            { title: '放置策略', dataIndex: 'placement_policy', render: (v?: string) => v || <Tag>默认</Tag> },
-            { title: '资源组', dataIndex: 'resource_group' },
+            { title: '放置策略', dataIndex: 'placement_policy', width: 140, render: (v?: string) => v || <Tag>默认</Tag> },
+            { title: '资源组', dataIndex: 'resource_group', width: 130 },
             { title: '关联数据库', key: 'databases', width: 200,
               render: (_, t) => {
                 const d = detail[String(t.id)]
@@ -165,7 +166,7 @@ export default function Tenants() {
                   return <Tag>共享（{d.total_store_count || 0}）</Tag>
                 return <Tag color="green">{d.stores.length} 节点</Tag>
               } },
-            { title: '状态', dataIndex: 'status',
+            { title: '状态', dataIndex: 'status', width: 100,
               render: (v: string) => <Tag color={statusColor[v]}>{v}</Tag> },
             { title: '操作', width: 280, render: (_, t) => (
               <Space>
